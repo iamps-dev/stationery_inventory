@@ -20,13 +20,11 @@ class Purchase extends Model
         'total_price',
     ];
 
-    // 🔥 Product relation
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 
-    // 🔥 Supplier relation
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);

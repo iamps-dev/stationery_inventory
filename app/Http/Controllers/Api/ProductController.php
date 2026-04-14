@@ -8,18 +8,20 @@ use App\Models\Product;
 
 class ProductController extends Controller
 {
-    // ✅ GET ALL
-    public function index()
-    {
-        return response()->json(Product::all());
-    }
+  public function index()
+{
+    return response()->json(
+        Product::orderBy('created_at', 'desc')->get()
+    );
+}
 
-    // ✅ STORE (🔥 unit logic important)
+    // ✅ STORE
     public function store(Request $request)
     {
         $product = Product::create([
             'name' => $request->name,
-            'base_unit' => 'piece', // always piece
+            'company_name' => $request->company_name, // ✅ ADDED
+            'base_unit' => 'piece',
             'default_unit_type' => $request->default_unit_type,
             'units_per_pack' => $request->units_per_pack ?? 1,
         ]);
@@ -53,6 +55,7 @@ class ProductController extends Controller
 
         $product->update([
             'name' => $request->name,
+            'company_name' => $request->company_name, // ✅ ADDED
             'default_unit_type' => $request->default_unit_type,
             'units_per_pack' => $request->units_per_pack ?? 1,
         ]);

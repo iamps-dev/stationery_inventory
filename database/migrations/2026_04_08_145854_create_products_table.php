@@ -6,27 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-       Schema::create('products', function (Blueprint $table) {
-    $table->id();
-    $table->string('name');
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
 
-    $table->string('base_unit')->default('piece');
+            $table->string('name');
+            $table->string('company_name')->nullable(); // ✅ ADDED
 
-    $table->string('default_unit_type')->nullable(); // piece/dozen/box
-    $table->integer('units_per_pack')->default(1);
+            $table->string('base_unit')->default('piece');
 
-    $table->timestamps();
-});
+            $table->string('default_unit_type')->nullable(); // piece/dozen/box
+            $table->integer('units_per_pack')->default(1);
+
+            $table->timestamps();
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('products');

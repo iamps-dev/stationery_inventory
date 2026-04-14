@@ -6,36 +6,27 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('purchases', function (Blueprint $table) {
-    $table->id();
+            $table->id();
 
-    $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-    $table->foreignId('supplier_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('supplier_id')->constrained()->cascadeOnDelete();
 
-    $table->integer('quantity');
-    $table->string('unit_type');
+            $table->decimal('quantity', 12, 2);
+            $table->enum('unit_type', ['piece', 'pack']);
+            $table->integer('units_per_pack')->default(1);
 
-    $table->integer('units_per_pack')->default(1);
+            $table->enum('price_type', ['per_piece', 'per_pack']);
+            $table->decimal('quantity_in_pieces', 12, 2)->default(0);
+            $table->decimal('purchase_price_per_unit', 12, 2)->default(0);
+            $table->decimal('total_price', 12, 2)->default(0);
 
-    $table->string('price_type'); // per_piece / per_pack
-
-    $table->integer('quantity_in_pieces');
-
-    $table->decimal('purchase_price_per_unit', 10, 2);
-    $table->decimal('total_price', 10, 2);
-
-    $table->timestamps();
-});
+            $table->timestamps();
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('purchases');

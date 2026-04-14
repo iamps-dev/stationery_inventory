@@ -14,6 +14,16 @@ class SaleController extends Controller
     // ✅ STORE SALE
     public function store(Request $request)
     {
+        // ✅ validation
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|numeric|min:1',
+            'unit_type' => 'required|in:piece,pack',
+            'price_type' => 'required|in:per_piece,per_pack',
+            'price' => 'required|numeric|min:0',
+            'units_per_pack' => 'nullable|numeric|min:1',
+        ]);
+
         // 👉 product check
         $product = Product::find($request->product_id);
 
@@ -25,12 +35,12 @@ class SaleController extends Controller
         $unitsPerPack = $request->units_per_pack ?? $product->units_per_pack ?? 1;
 
         // 👉 quantity → pieces
-        $quantityInPieces = ($request->unit_type == 'piece')
+        $quantityInPieces = ($request->unit_type === 'piece')
             ? $request->quantity
             : $request->quantity * $unitsPerPack;
 
         // 👉 selling price → per piece
-        $sellingPricePerPiece = ($request->price_type == 'per_piece')
+        $sellingPricePerPiece = ($request->price_type === 'per_piece')
             ? $request->price
             : $request->price / $unitsPerPack;
 
@@ -40,7 +50,7 @@ class SaleController extends Controller
             ->first();
 
         $costPricePerPiece = $lastPurchase
-            ? $lastPurchase->purchase_price_per_unit
+            ? (float) $lastPurchase->purchase_price_per_unit
             : 0;
 
         // 👉 calculations
@@ -56,7 +66,10 @@ class SaleController extends Controller
         }
 
         if ($stock->total_quantity < $quantityInPieces) {
-            return response()->json(['message' => 'Not enough stock'], 400);
+            return response()->json([
+                'message' => 'Not enough stock',
+                'available_stock' => $stock->total_quantity
+            ], 400);
         }
 
         // 👉 save sale
@@ -77,28 +90,60 @@ class SaleController extends Controller
         // 🔥 stock minus
         $stock->decrement('total_quantity', $quantityInPieces);
 
+        // ✅ refresh stock for correct remaining quantity
+        $stock->refresh();
+
         return response()->json([
             'message' => 'Sale saved successfully',
-            'data' => $sale->load('product'),
-            'remaining_stock' => $stock->total_quantity
+            'data' => [
+                ...$sale->load('product')->toArray(),
+                'remaining_stock' => $stock->total_quantity,
+                'current_stock' => $stock->total_quantity,
+            ]
         ]);
     }
 
     // ✅ LIST ALL SALES
     public function index()
     {
-        return Sale::with('product')
-            ->latest()
-            ->get();
+        $sales = Sale::with('product')->latest()->get();
+
+        $sales->transform(function ($sale) {
+            $stock = Stock::where('product_id', $sale->product_id)->first();
+
+            $sale->current_stock = $stock ? $stock->total_quantity : 0;
+            $sale->remaining_stock = $stock ? $stock->total_quantity : 0;
+
+            return $sale;
+        });
+
+        return response()->json([
+            'message' => 'Sales fetched successfully',
+            'data' => $sales
+        ]);
     }
 
     // ✅ SINGLE SALE
     public function show($id)
     {
-        return Sale::with('product')->find($id);
+        $sale = Sale::with('product')->find($id);
+
+        if (!$sale) {
+            return response()->json(['message' => 'Sale not found'], 404);
+        }
+
+        $stock = Stock::where('product_id', $sale->product_id)->first();
+
+        $sale->current_stock = $stock ? $stock->total_quantity : 0;
+        $sale->remaining_stock = $stock ? $stock->total_quantity : 0;
+
+        return response()->json([
+            'message' => 'Sale fetched successfully',
+            'data' => $sale
+        ]);
     }
 
-    // ✅ DELETE (optional)
+    // ✅ DELETE
     public function destroy($id)
     {
         $sale = Sale::find($id);
@@ -107,8 +152,14 @@ class SaleController extends Controller
             return response()->json(['message' => 'Not found'], 404);
         }
 
+        // ✅ optional: restore stock before delete
+        $stock = Stock::where('product_id', $sale->product_id)->first();
+        if ($stock) {
+            $stock->increment('total_quantity', $sale->quantity_in_pieces);
+        }
+
         $sale->delete();
 
-        return response()->json(['message' => 'Deleted']);
+        return response()->json(['message' => 'Deleted successfully']);
     }
 }

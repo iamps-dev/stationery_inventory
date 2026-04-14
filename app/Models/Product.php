@@ -9,7 +9,8 @@ class Product extends Model
     protected $table = 'products';
 
     protected $fillable = [
-        'name',
+       'name',
+        'company_name', // ✅ ADDED
         'base_unit',
         'default_unit_type',
         'units_per_pack',

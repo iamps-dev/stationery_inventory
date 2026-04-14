@@ -5,13 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Supplier;
+use Illuminate\Support\Facades\Cache;
 
 class SupplierController extends Controller
 {
-    // ✅ GET ALL
+    // ✅ GET ALL (WITH CACHE)
     public function index()
     {
-        return response()->json(Supplier::all());
+        $suppliers = Cache::remember('suppliers_list', 600, function () {
+            return Supplier::orderBy('created_at', 'desc')->get();
+        });
+
+        return response()->json($suppliers);
     }
 
     // ✅ STORE
@@ -24,16 +29,21 @@ class SupplierController extends Controller
             'created_at' => now(),
         ]);
 
+        // 🔥 CLEAR CACHE
+        Cache::forget('suppliers_list');
+
         return response()->json([
             'message' => 'Supplier created successfully',
             'data' => $supplier
         ]);
     }
 
-    // ✅ SHOW SINGLE
+    // ✅ SHOW SINGLE (WITH CACHE)
     public function show($id)
     {
-        $supplier = Supplier::find($id);
+        $supplier = Cache::remember("supplier_$id", 600, function () use ($id) {
+            return Supplier::find($id);
+        });
 
         if (!$supplier) {
             return response()->json(['message' => 'Not found'], 404);
@@ -53,6 +63,10 @@ class SupplierController extends Controller
 
         $supplier->update($request->only(['name', 'mobile', 'address']));
 
+        // 🔥 CLEAR CACHE
+        Cache::forget('suppliers_list');
+        Cache::forget("supplier_$id");
+
         return response()->json([
             'message' => 'Supplier updated',
             'data' => $supplier
@@ -69,6 +83,10 @@ class SupplierController extends Controller
         }
 
         $supplier->delete();
+
+        // 🔥 CLEAR CACHE
+        Cache::forget('suppliers_list');
+        Cache::forget("supplier_$id");
 
         return response()->json(['message' => 'Supplier deleted']);
     }
