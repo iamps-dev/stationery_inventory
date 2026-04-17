@@ -5,43 +5,78 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Models\Stock;
 
 class ProductController extends Controller
 {
-  public function index()
-{
-    return response()->json(
-        Product::orderBy('created_at', 'desc')->get()
-    );
-}
+    // ✅ GET PRODUCTS
+    public function index()
+    {
+        $products = Product::with('stock')
+            ->latest()
+            ->get()
+            ->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'company_name' => $product->company_name,
+                    'current_stock' => $product->stock
+                        ? (int) $product->stock->total_quantity
+                        : 0,
+                ];
+            });
 
-    // ✅ STORE
+        return response()->json($products);
+    }
+
+    // ✅ CREATE PRODUCT (ONLY NAME + COMPANY)
     public function store(Request $request)
     {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+        ]);
+
+        // ✅ create product
         $product = Product::create([
             'name' => $request->name,
-            'company_name' => $request->company_name, // ✅ ADDED
-            'base_unit' => 'piece',
-            'default_unit_type' => $request->default_unit_type,
-            'units_per_pack' => $request->units_per_pack ?? 1,
+            'company_name' => $request->company_name,
+        ]);
+
+        // ✅ auto create stock
+        Stock::create([
+            'product_id' => $product->id,
+            'total_quantity' => 0,
         ]);
 
         return response()->json([
-            'message' => 'Product created',
-            'data' => $product
-        ]);
+            'message' => 'Product created successfully',
+            'data' => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'company_name' => $product->company_name,
+                'current_stock' => 0,
+            ]
+        ], 201);
     }
 
-    // ✅ SHOW
+    // ✅ SHOW SINGLE
     public function show($id)
     {
-        $product = Product::find($id);
+        $product = Product::with('stock')->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
-        return response()->json($product);
+        return response()->json([
+            'id' => $product->id,
+            'name' => $product->name,
+            'company_name' => $product->company_name,
+            'current_stock' => $product->stock
+                ? (int) $product->stock->total_quantity
+                : 0,
+        ]);
     }
 
     // ✅ UPDATE
@@ -54,14 +89,12 @@ class ProductController extends Controller
         }
 
         $product->update([
-            'name' => $request->name,
-            'company_name' => $request->company_name, // ✅ ADDED
-            'default_unit_type' => $request->default_unit_type,
-            'units_per_pack' => $request->units_per_pack ?? 1,
+            'name' => $request->name ?? $product->name,
+            'company_name' => $request->company_name ?? $product->company_name,
         ]);
 
         return response()->json([
-            'message' => 'Product updated',
+            'message' => 'Updated',
             'data' => $product
         ]);
     }
@@ -69,14 +102,10 @@ class ProductController extends Controller
     // ✅ DELETE
     public function destroy($id)
     {
-        $product = Product::find($id);
+        Product::findOrFail($id)->delete();
 
-        if (!$product) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
-
-        $product->delete();
-
-        return response()->json(['message' => 'Product deleted']);
+        return response()->json([
+            'message' => 'Deleted'
+        ]);
     }
 }

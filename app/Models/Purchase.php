@@ -20,6 +20,14 @@ class Purchase extends Model
         'total_price',
     ];
 
+    protected $casts = [
+        'quantity' => 'decimal:2',
+        'units_per_pack' => 'decimal:2',
+        'quantity_in_pieces' => 'decimal:2',
+        'purchase_price_per_unit' => 'decimal:2',
+        'total_price' => 'decimal:2',
+    ];
+
     public function product()
     {
         return $this->belongsTo(Product::class);

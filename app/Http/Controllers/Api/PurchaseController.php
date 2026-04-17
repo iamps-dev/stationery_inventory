@@ -11,72 +11,64 @@ use App\Models\Supplier;
 
 class PurchaseController extends Controller
 {
-    // ✅ STORE PURCHASE
     public function store(Request $request)
     {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'supplier_id' => 'required|exists:suppliers,id',
-            'quantity' => 'required|numeric|min:1',
-            'unit_type' => 'required|in:piece,pack',
-            'units_per_pack' => 'nullable|numeric|min:1',
-            'price_type' => 'required|in:per_piece,per_pack',
-            'price' => 'required|numeric|min:0',
+        $validated = $request->validate([
+            'product_id'     => 'required|integer|exists:products,id',
+            'supplier_id'    => 'required|integer|exists:suppliers,id',
+            'quantity'       => 'required|numeric|min:1',
+            'unit_type'      => 'required|in:piece,pack,dozen,box,bundle,ream',
+            'units_per_pack' => 'required|numeric|min:1',
+            'price_type'     => 'required|in:per_piece,per_pack',
+            'price'          => 'required|numeric|min:0',
         ]);
 
-        $product = Product::find($request->product_id);
-        $supplier = Supplier::find($request->supplier_id);
+        $product = Product::find($validated['product_id']);
+        $supplier = Supplier::find($validated['supplier_id']);
 
         if (!$product) {
-            return response()->json([
-                'message' => 'Product not found'
-            ], 404);
+            return response()->json(['message' => 'Product not found'], 404);
         }
 
         if (!$supplier) {
-            return response()->json([
-                'message' => 'Supplier not found'
-            ], 404);
+            return response()->json(['message' => 'Supplier not found'], 404);
         }
 
-        $unitsPerPack = $request->units_per_pack ?? $product->units_per_pack ?? 1;
+        $quantity = (float) $validated['quantity'];
+        $unitsPerPack = (float) $validated['units_per_pack'];
+        $price = (float) $validated['price'];
+        $unitType = $validated['unit_type'];
+        $priceType = $validated['price_type'];
 
-        if ($unitsPerPack <= 0) {
-            return response()->json([
-                'message' => 'Invalid units per pack'
-            ], 400);
+        $quantityInPieces = $quantity * $unitsPerPack;
+
+        if ($priceType === 'per_piece') {
+            $pricePerPiece = $price;
+            $totalPrice = $quantityInPieces * $pricePerPiece;
+        } else {
+            $pricePerPiece = $price / $unitsPerPack;
+            $totalPrice = $quantity * $price;
         }
-
-        $quantityInPieces = ($request->unit_type === 'piece')
-            ? $request->quantity
-            : $request->quantity * $unitsPerPack;
-
-        $price = $request->price;
-
-        $pricePerPiece = ($request->price_type === 'per_piece')
-            ? $price
-            : ($price / $unitsPerPack);
-
-        $totalPrice = $quantityInPieces * $pricePerPiece;
 
         $purchase = Purchase::create([
-            'product_id' => $request->product_id,
-            'supplier_id' => $request->supplier_id,
-            'quantity' => $request->quantity,
-            'unit_type' => $request->unit_type,
-            'units_per_pack' => $unitsPerPack,
-            'price_type' => $request->price_type,
-            'quantity_in_pieces' => $quantityInPieces,
-            'purchase_price_per_unit' => $pricePerPiece,
-            'total_price' => $totalPrice,
+            'product_id'              => $validated['product_id'],
+            'supplier_id'             => $validated['supplier_id'],
+            'quantity'                => $quantity,
+            'unit_type'               => $unitType,
+            'units_per_pack'          => $unitsPerPack,
+            'price_type'              => $priceType,
+            'quantity_in_pieces'      => round($quantityInPieces, 2),
+            'purchase_price_per_unit' => round($pricePerPiece, 2),
+            'total_price'             => round($totalPrice, 2),
         ]);
 
         $stock = Stock::firstOrCreate(
-            ['product_id' => $request->product_id],
+            ['product_id' => $validated['product_id']],
             ['total_quantity' => 0]
         );
 
-        $stock->increment('total_quantity', $quantityInPieces);
+        $stock->total_quantity = (float) $stock->total_quantity + $quantityInPieces;
+        $stock->save();
         $stock->refresh();
 
         return response()->json([
@@ -86,7 +78,6 @@ class PurchaseController extends Controller
         ], 201);
     }
 
-    // ✅ LIST
     public function index()
     {
         $purchases = Purchase::with('product', 'supplier')
@@ -98,17 +89,19 @@ class PurchaseController extends Controller
                 return $purchase;
             });
 
-        return response()->json($purchases);
+        return response()->json([
+            'message' => 'Purchases fetched successfully',
+            'data' => $purchases,
+        ]);
     }
 
-    // ✅ SHOW
     public function show($id)
     {
         $purchase = Purchase::with('product', 'supplier')->find($id);
 
         if (!$purchase) {
             return response()->json([
-                'message' => 'Purchase not found'
+                'message' => 'Purchase not found',
             ], 404);
         }
 
@@ -116,35 +109,36 @@ class PurchaseController extends Controller
             ->value('total_quantity') ?? 0;
 
         return response()->json([
+            'message' => 'Purchase fetched successfully',
             'data' => $purchase,
             'current_stock' => $currentStock,
         ]);
     }
 
-    // ✅ DELETE
     public function destroy($id)
     {
         $purchase = Purchase::find($id);
 
         if (!$purchase) {
             return response()->json([
-                'message' => 'Purchase not found'
+                'message' => 'Purchase not found',
             ], 404);
         }
 
         $stock = Stock::where('product_id', $purchase->product_id)->first();
 
         if ($stock) {
-            $newQty = max(0, $stock->total_quantity - $purchase->quantity_in_pieces);
+            $newQty = max(0, (float) $stock->total_quantity - (float) $purchase->quantity_in_pieces);
+
             $stock->update([
-                'total_quantity' => $newQty
+                'total_quantity' => round($newQty, 2),
             ]);
         }
 
         $purchase->delete();
 
         return response()->json([
-            'message' => 'Deleted successfully'
+            'message' => 'Deleted successfully',
         ]);
     }
 }

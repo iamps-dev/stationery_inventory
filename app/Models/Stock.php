@@ -14,6 +14,9 @@ class Stock extends Model
         'total_quantity',
     ];
 
+    const CREATED_AT = null;
+    const UPDATED_AT = 'updated_at';
+
     public function product()
     {
         return $this->belongsTo(Product::class);

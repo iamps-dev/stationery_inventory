@@ -21,7 +21,17 @@ class Sale extends Model
         'profit',
     ];
 
-    // 🔥 Product relation (for name)
+    protected $casts = [
+        'quantity' => 'integer',
+        'units_per_pack' => 'integer',
+        'quantity_in_pieces' => 'integer',
+        'selling_price_per_unit' => 'float',
+        'cost_price_per_unit' => 'float',
+        'total_amount' => 'float',
+        'total_cost' => 'float',
+        'profit' => 'float',
+    ];
+
     public function product()
     {
         return $this->belongsTo(Product::class);
